@@ -81,9 +81,35 @@ const imageCore = (() => {
     );
   }
 
-  function renderTile(context, source, view, tile, frame) {
+  function drawBackground(context, frame, background) {
+    let fill = background.color;
+    if (background.mode === 'gradient') {
+      const angle = background.angle * Math.PI / 180;
+      const dx = Math.sin(angle);
+      const dy = -Math.cos(angle);
+      const x = frame.width / 2;
+      const y = frame.height / 2;
+      const halfLength = Math.abs(x * dx) + Math.abs(y * dy);
+      fill = context.createLinearGradient(x - dx * halfLength, y - dy * halfLength, x + dx * halfLength, y + dy * halfLength);
+      fill.addColorStop(0, background.start);
+      fill.addColorStop(1, background.end);
+    }
+    context.fillStyle = fill;
+    context.fillRect(0, 0, frame.width, frame.height);
+  }
+
+  function renderTile(context, source, view, tile, frame, background) {
     const { outputWidth: width, outputHeight: height } = frame;
     context.clearRect(0, 0, width, height);
+    if (background) {
+      // Use the entire frame's coordinates so the gradient continues through the gutters.
+      const sx = width / tile.width;
+      const sy = height / tile.height;
+      context.save();
+      context.transform(sx, 0, 0, sy, -tile.x * sx, -tile.y * sy);
+      drawBackground(context, frame, background);
+      context.restore();
+    }
     context.imageSmoothingQuality = 'high';
     drawImageArea(context, source, view, tile, { x: 0, y: 0, width, height });
   }
@@ -208,9 +234,9 @@ const imageCore = (() => {
       && view.y + source.height * view.scale >= tile.y + tile.height - tolerance;
   }
 
-  async function encodeTile(source, view, tile, frame, format, canvases) {
+  async function encodeTile(source, view, tile, frame, format, canvases, background) {
     const { tileContext, opaqueContext } = canvases;
-    renderTile(tileContext, source, view, tile, frame);
+    renderTile(tileContext, source, view, tile, frame, background);
     const tryPNG = format === 'png' || (format === 'auto' && (source.kind !== 'jpeg' || !coversTile(source, view, tile)));
     if (tryPNG) {
       const png = await toBlob(tileContext.canvas, 'image/png');
@@ -276,5 +302,5 @@ const imageCore = (() => {
     return new Blob([...parts, ...directory, end], { type: 'application/zip' });
   }
 
-  return { preset, clamp, centeredView, zoomAt, makeCanvas, imageIntersection, drawImageArea, renderTile, inspectImage, decodeImage, encodeTile, makeZip };
+  return { preset, clamp, centeredView, zoomAt, makeCanvas, imageIntersection, drawImageArea, drawBackground, renderTile, inspectImage, decodeImage, encodeTile, makeZip };
 })();

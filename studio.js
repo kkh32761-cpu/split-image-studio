@@ -2,7 +2,7 @@
 
 (() => {
   const {
-    preset, clamp, centeredView, zoomAt, makeCanvas, imageIntersection, drawImageArea, renderTile,
+    preset, clamp, centeredView, zoomAt, makeCanvas, imageIntersection, drawImageArea, drawBackground, renderTile,
     inspectImage, decodeImage, encodeTile, makeZip,
   } = imageCore;
   const byId = id => document.getElementById(id);
@@ -14,6 +14,8 @@
   const previewTile = makeCanvas(preset.outputWidth, preset.outputHeight).getContext('2d');
   const fileInput = byId('file-input');
   const format = byId('format');
+  const backgroundMode = byId('background-mode');
+  const backgroundInputs = document.querySelectorAll('.background-settings input, .background-settings select');
   const zoom = byId('zoom');
   const zoomValue = byId('zoom-value');
   const exportButton = byId('export');
@@ -22,6 +24,7 @@
   const exportStatus = byId('export-status');
   const guides = byId('show-guides');
   const numbers = byId('show-numbers');
+  const sourceBounds = byId('show-source-bounds');
   const snapAlignment = byId('snap-center');
   const chooseButtons = Array.from(document.querySelectorAll('.choose-file'));
   const compositionButtons = ['zoom', 'zoom-value', 'zoom-in', 'zoom-out', 'fit', 'fill', 'reset'].map(byId);
@@ -35,6 +38,7 @@
   const snapAnchors = [0.5, 0, 1];
 
   let source = null;
+  let background = null;
   let view = null;
   let scene = null;
   let pan = null;
@@ -64,6 +68,7 @@
     for (const control of compositionButtons) control.disabled = !canEdit;
     for (const button of chooseButtons) button.disabled = loading || exporting;
     format.disabled = exporting;
+    for (const input of backgroundInputs) input.disabled = exporting;
     exportButton.disabled = !canEdit;
     byId('export-label').textContent = exporting ? '이미지 생성 중…' : '6장 생성 + ZIP 다운로드';
     stage.classList.toggle('has-image', Boolean(source));
@@ -163,6 +168,32 @@
     updateZoom();
     scheduleDraw(true);
     status(exportStatus, hadResults ? '현재 구도로 6장을 다시 생성할 수 있습니다.' : '구도를 확인한 뒤 ZIP을 받아보세요.');
+  }
+
+  function updateFormatHelp() {
+    let message = 'PNG가 200KB를 넘는 칸은 JPG로 저장합니다.';
+    if (format.value === 'jpeg') {
+      message = background ? '선택한 배경과 함께 JPG로 저장합니다.' : '투명한 부분은 흰색으로 채우고 JPG로 저장합니다.';
+    }
+    byId('format-help').textContent = message;
+  }
+
+  function updateBackground() {
+    const mode = backgroundMode.value;
+    byId('solid-settings').hidden = mode !== 'solid';
+    byId('gradient-settings').hidden = mode !== 'gradient';
+    byId('transparent-caption').hidden = mode !== 'transparent';
+
+    background = null;
+    if (mode === 'solid') background = { mode, color: byId('background-color').value };
+    if (mode === 'gradient') {
+      background = {
+        mode, start: byId('gradient-start').value, end: byId('gradient-end').value,
+        angle: Number(byId('gradient-direction').value),
+      };
+    }
+    updateFormatHelp();
+    if (source) compositionChanged();
   }
 
   function editorPoint(event) {
@@ -267,8 +298,16 @@
 
     if (source) {
       const stageArea = { x: -x / scale, y: -y / scale, width: width / scale, height: height / scale };
-      context.fillStyle = '#fff';
-      context.fillRect(x, y, frameWidth, frameHeight);
+      if (background) {
+        context.save();
+        context.translate(x, y);
+        context.scale(scale, scale);
+        drawBackground(context, preset, background);
+        context.restore();
+      } else {
+        context.fillStyle = '#fff';
+        context.fillRect(x, y, frameWidth, frameHeight);
+      }
       drawImageArea(context, source, view, stageArea, { x: 0, y: 0, width, height });
 
       context.fillStyle = 'rgba(10, 14, 20, 0.77)';
@@ -276,6 +315,15 @@
       context.fillRect(0, y + frameHeight, width, height - y - frameHeight);
       context.fillRect(0, y, x, frameHeight);
       context.fillRect(x + frameWidth, y, width - x - frameWidth, frameHeight);
+
+      if (sourceBounds?.checked) {
+        context.save();
+        context.strokeStyle = '#6bbcff';
+        context.lineWidth = 1.5;
+        context.setLineDash([5, 4]);
+        context.strokeRect(x + view.x * scale, y + view.y * scale, source.width * view.scale * scale, source.height * view.scale * scale);
+        context.restore();
+      }
     } else {
       context.fillStyle = '#1b222b';
       context.fillRect(x, y, frameWidth, frameHeight);
@@ -347,7 +395,7 @@
         previewTile.clearRect(0, 0, preset.outputWidth, preset.outputHeight);
         previewTile.drawImage(results[index].image, 0, 0);
       } else {
-        renderTile(previewTile, source, view, tile, preset);
+        renderTile(previewTile, source, view, tile, preset, background);
       }
       context.drawImage(previewTile.canvas, tile.x, tile.y, tile.width, tile.height);
     }
@@ -407,7 +455,7 @@
     if (exportButton.disabled) return;
     commitZoomValue();
     finishZoom();
-    const snapshot = { source, view: { ...view }, format: format.value };
+    const snapshot = { source, view: { ...view }, format: format.value, background };
     if (!preset.tiles.some(tile => imageIntersection(snapshot.source, snapshot.view, tile))) {
       status(exportStatus, '출력 칸 안에 이미지가 없습니다. 사진을 프레임 안으로 옮겨 주세요.', 'error');
       return;
@@ -424,7 +472,7 @@
       if (!canvases.tileContext || !canvases.opaqueContext) throw new Error('출력에 필요한 캔버스를 준비할 수 없습니다.');
       for (const [index, tile] of preset.tiles.entries()) {
         status(exportStatus, `${index + 1}/${preset.tiles.length}번 이미지 생성 및 용량 확인 중…`);
-        const file = await encodeTile(snapshot.source, snapshot.view, tile, preset, snapshot.format, canvases);
+        const file = await encodeTile(snapshot.source, snapshot.view, tile, preset, snapshot.format, canvases, snapshot.background);
         if (file.blob.size <= 0 || file.blob.size > preset.maxBytes) throw new Error(`${index + 1}번 이미지의 출력 용량을 확인할 수 없습니다.`);
         files.push({ ...file, name: `${tile.name}.${file.extension}` });
       }
@@ -591,11 +639,11 @@
   byId('reset').addEventListener('click', () => setCentered('fill'));
   guides.addEventListener('change', () => scheduleDraw());
   numbers.addEventListener('change', () => scheduleDraw());
+  sourceBounds?.addEventListener('change', () => scheduleDraw());
   snapAlignment?.addEventListener('change', () => scheduleDraw());
+  for (const input of backgroundInputs) input.addEventListener('input', updateBackground);
   format.addEventListener('change', () => {
-    byId('format-help').textContent = format.value === 'jpeg'
-      ? '투명한 부분은 흰색으로 채우고 JPG로 저장합니다.'
-      : 'PNG가 200KB를 넘는 칸은 JPG로 저장합니다.';
+    updateFormatHelp();
     if (source) compositionChanged();
   });
   exportButton.addEventListener('click', exportTiles);
@@ -606,6 +654,7 @@
     canvas.addEventListener('contextlost', () => status(loadNote, '브라우저에서 캔버스 메모리를 잃었습니다. 사용 중인 탭을 줄인 뒤 다시 시도해 주세요.', 'error'));
     canvas.addEventListener('contextrestored', () => scheduleDraw(true));
   }
+  if (backgroundMode) updateBackground();
   updateControls();
   scheduleDraw(true);
 })();

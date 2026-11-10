@@ -8,9 +8,9 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' file:; style-src 'self' file:; img-src 'self' blob: data:; base-uri 'none'; form-action 'none'">
   <title>6분할 이미지 스튜디오</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23c4f080'/%3E%3Cpath d='M8 8h6v4H8zm10 0h6v4h-6zM8 14h6v4H8zm10 0h6v4h-6zM8 20h6v4H8zm10 0h6v4h-6z' fill='%23161e13'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="./styles.css?v=2">
-  <script defer src="./image-core.js"></script>
-  <script defer src="./studio.js?v=3"></script>
+  <link rel="stylesheet" href="./styles.css?v=4">
+  <script defer src="./image-core.js?v=4"></script>
+  <script defer src="./studio.js?v=4"></script>
 </head>
 <body>
   <svg class="symbols" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -59,6 +59,30 @@
           <dl><div><dt>해상도</dt><dd id="file-resolution"></dd></div><div><dt>원본 크기</dt><dd id="file-size"></dd></div></dl>
         </div>
         <p class="load-note" id="load-note" role="status" aria-atomic="true" hidden></p>
+        <div class="background-settings">
+          <label for="background-mode">배경</label>
+          <select id="background-mode">
+            <option value="transparent">투명</option>
+            <option value="solid">단색</option>
+            <option value="gradient">그라데이션</option>
+          </select>
+          <div class="background-options" id="solid-settings" hidden>
+            <label class="background-color">배경색 <input id="background-color" type="color" value="#202536"></label>
+          </div>
+          <div class="background-options" id="gradient-settings" hidden>
+            <div class="background-colors">
+              <label class="background-color">시작색 <input id="gradient-start" type="color" value="#362454"></label>
+              <label class="background-color">끝색 <input id="gradient-end" type="color" value="#efad82"></label>
+            </div>
+            <label for="gradient-direction">방향</label>
+            <select id="gradient-direction">
+              <option value="90">왼쪽 → 오른쪽</option>
+              <option value="180">위 → 아래</option>
+              <option value="135">왼쪽 위 → 오른쪽 아래</option>
+              <option value="45">왼쪽 아래 → 오른쪽 위</option>
+            </select>
+          </div>
+        </div>
         <div class="source-help">
           <h3>사용 순서</h3>
           <ol><li>원본 이미지를 불러옵니다.</li><li>캔버스에서 구도를 맞춥니다.</li><li>미리보기 확인 후 ZIP을 받습니다.</li></ol>
@@ -108,6 +132,7 @@
           <label class="toggle-row" title="Alt를 누른 채 드래그하면 잠시 해제됩니다"><input id="snap-center" type="checkbox" checked> 중앙·가장자리 자동 맞춤</label>
           <label class="toggle-row"><input id="show-guides" type="checkbox" checked> 분할 가이드 표시</label>
           <label class="toggle-row"><input id="show-numbers" type="checkbox" checked> 칸 번호 표시</label>
+          <label class="toggle-row" title="투명 여백을 포함한 원본의 경계를 표시합니다"><input id="show-source-bounds" type="checkbox" checked> 원본 테두리 표시</label>
         </div>
         <div class="setting-group output-settings">
           <label for="format">출력 형식</label>
@@ -133,7 +158,7 @@
           <canvas id="preview" width="883" height="278" aria-label="441×92px 이미지 6장을 검은색 1px 간격으로 배치한 미리보기"></canvas>
           <p id="empty-preview" class="empty-preview">이미지를 불러오면 여기에 표시됩니다</p>
         </div>
-        <p class="preview-caption">칸 사이 1px 간격은 미리보기에만 표시합니다. 투명 영역은 흰색 바탕으로 표시합니다.</p>
+        <p class="preview-caption">칸 사이 1px 간격은 미리보기에만 표시합니다. <span id="transparent-caption">투명 영역은 흰색 바탕으로 표시합니다.</span></p>
       </div>
       <div class="download-area">
         <p class="download-kicker">분할 이미지 저장</p>

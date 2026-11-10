@@ -66,6 +66,11 @@ button, input, select { font: inherit; }
 .file-details dt { color: var(--muted); }
 .file-details dd { text-align: right; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 .load-note { margin-top: 10px; color: var(--muted); font-size: 11.5px; overflow-wrap: anywhere; }
+.background-settings { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line-soft); }
+.background-options { display: grid; gap: 7px; margin-top: 8px; color: var(--muted); font-size: 11px; }
+.background-colors { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.background-color { display: flex; justify-content: space-between; align-items: center; gap: 3px; white-space: nowrap; }
+.background-color input { width: 28px; height: 24px; padding: 2px; border: 1px solid #454e5a; border-radius: 4px; background: #13171d; cursor: pointer; }
 .source-help { margin-top: 17px; padding-top: 13px; border-top: 1px solid var(--line-soft); color: var(--muted); font-size: 12px; }
 .source-help h3 { color: var(--text); font-size: 12px; }
 .source-help ol { margin: 7px 0; padding-left: 19px; }
@@ -92,7 +97,7 @@ button, input, select { font: inherit; }
 
 .setting-group + .setting-group { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line-soft); }
 .label-row { display: flex; justify-content: space-between; align-items: center; }
-.label-row label, .output-settings > label { font-size: 12px; font-weight: 650; }
+.label-row label, .output-settings > label, .background-settings > label { font-size: 12px; font-weight: 650; }
 .zoom-field { display: flex; align-items: center; gap: 4px; padding-right: 6px; border: 1px solid #414c58; border-radius: 5px; background: #13171d; color: var(--accent); font: 600 12px var(--mono); }
 .zoom-field:focus-within { border-color: var(--accent); }
 .zoom-field input { width: 8ch; padding: 5px 0 5px 5px; border: 0; background: transparent; color: inherit; font: inherit; text-align: right; appearance: textfield; }
@@ -107,7 +112,8 @@ input:disabled { cursor: default; }
 .guide-controls { display: grid; gap: 7px; }
 .toggle-row { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; cursor: pointer; }
 .toggle-row input { width: 14px; height: 14px; margin: 0; accent-color: var(--accent); }
-.output-settings select { display: block; width: 100%; margin-top: 6px; padding: 6px 8px; border: 1px solid #454e5a; border-radius: 5px; background: #13171d; color: var(--text); font-size: 12px; }
+.output-settings select, .background-settings select { display: block; width: 100%; margin-top: 6px; padding: 6px 8px; border: 1px solid #454e5a; border-radius: 5px; background: #13171d; color: var(--text); font-size: 12px; }
+.background-options select { margin-top: 0; }
 .output-settings p { margin-top: 6px; min-height: 34px; color: var(--muted); font-size: 11px; }
 .spec-list { display: grid; gap: 4px; margin-top: 5px; }
 .spec-list dt { color: var(--muted); font-size: 11px; }
