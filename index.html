@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="이미지 한 장을 편집해 720×150px 6장으로 분할하고 ZIP으로 받는 무료 브라우저 도구입니다.">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' file:; style-src 'self' file:; img-src 'self' blob: data:; base-uri 'none'; form-action 'none'">
+  <title>6분할 이미지 스튜디오</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23c4f080'/%3E%3Cpath d='M8 8h6v4H8zm10 0h6v4h-6zM8 14h6v4H8zm10 0h6v4h-6zM8 20h6v4H8zm10 0h6v4h-6z' fill='%23161e13'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="./styles.css">
+  <script defer src="./image-core.js"></script>
+  <script defer src="./studio.js"></script>
+</head>
+<body>
+  <svg class="symbols" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <symbol id="icon-grid" viewBox="0 0 24 24"><path d="M4 4h6v4H4zm10 0h6v4h-6zM4 10h6v4H4zm10 0h6v4h-6zM4 16h6v4H4zm10 0h6v4h-6z" fill="currentColor"/></symbol>
+    <symbol id="icon-image" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m3 16 5-5 4 4 3-3 6 6"/><circle cx="15.5" cy="8.5" r="1"/></symbol>
+    <symbol id="icon-download" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></symbol>
+    <symbol id="icon-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></symbol>
+    <symbol id="icon-reset" viewBox="0 0 24 24"><path d="M4 11a8 8 0 1 1 1.6 5M4 5v6h6"/></symbol>
+    <symbol id="icon-fit" viewBox="0 0 24 24"><path d="M8 4H4v4m12-4h4v4M4 16v4h4m12-4v4h-4"/><rect x="8" y="9" width="8" height="6" rx="1"/></symbol>
+    <symbol id="icon-fill" viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12" rx="2"/><path d="m8 14 3-3 3 3 2-2 4 4"/></symbol>
+    <symbol id="icon-pan" viewBox="0 0 24 24"><path d="M12 3v18M3 12h18m-12-6 3-3 3 3m-9 3-3 3 3 3m12-6 3 3-3 3m-9 3 3 3 3-3"/></symbol>
+    <symbol id="icon-mouse" viewBox="0 0 24 24"><rect x="7" y="3" width="10" height="18" rx="5"/><path d="M12 7v4"/></symbol>
+  </svg>
+
+  <header class="topbar">
+    <div class="shell topbar-inner">
+      <div class="brand">
+        <span class="brand-mark"><svg class="icon" aria-hidden="true"><use href="#icon-grid"/></svg></span>
+        <span>Split Image Studio</span>
+      </div>
+      <div class="privacy"><svg class="icon" aria-hidden="true"><use href="#icon-shield"/></svg> 브라우저에서만 처리</div>
+    </div>
+  </header>
+
+  <main class="shell">
+    <div class="intro">
+      <div>
+        <h1>6분할 이미지 스튜디오</h1>
+        <p>사진을 원하는 구도로 맞추고, 플랫폼 규격에 맞는 이미지 6장을 받아보세요.</p>
+      </div>
+      <span class="preset-tag"><span aria-hidden="true"></span> 기본 프리셋 <b>2열 × 3행</b></span>
+    </div>
+
+    <div class="workspace">
+      <aside class="panel source-panel" aria-labelledby="source-heading">
+        <div class="panel-heading"><span class="step-number">01</span><h2 id="source-heading">원본 이미지</h2></div>
+        <input type="file" id="file-input" accept=".jpg,.jpeg,.png,.webp,.gif,image/jpeg,image/png,image/webp,image/gif" hidden>
+        <div class="drop-zone" data-drop-target>
+          <svg class="icon drop-icon" aria-hidden="true"><use href="#icon-image"/></svg>
+          <p>이미지를 여기에 놓기</p>
+          <button class="button button-secondary choose-file" id="choose-file" type="button">파일 선택</button>
+          <span class="format-note">JPG · PNG · WEBP · GIF</span>
+        </div>
+        <div id="file-details" class="file-details" hidden>
+          <div class="filename" id="file-name"></div>
+          <dl><div><dt>해상도</dt><dd id="file-resolution"></dd></div><div><dt>원본 크기</dt><dd id="file-size"></dd></div></dl>
+        </div>
+        <p class="load-note" id="load-note" role="status" aria-atomic="true" hidden></p>
+        <div class="source-help">
+          <h3>사용 순서</h3>
+          <ol><li>원본 이미지를 불러옵니다.</li><li>캔버스에서 구도를 맞춥니다.</li><li>미리보기 확인 후 ZIP을 받습니다.</li></ol>
+          <p>GIF는 첫 프레임을 사용합니다.</p>
+        </div>
+      </aside>
+
+      <section class="panel editor-panel" aria-labelledby="editor-heading">
+        <div class="panel-heading editor-heading"><div class="heading-group"><span class="step-number">02</span><h2 id="editor-heading">구도 편집</h2></div><span class="panel-detail">883 × 278px</span></div>
+        <div class="stage" id="stage" data-drop-target>
+          <canvas id="editor" aria-label="이미지 구도 편집 캔버스" aria-describedby="editor-help" tabindex="0"></canvas>
+          <div class="empty-editor" id="empty-editor">
+            <span class="empty-mark"><svg class="icon" aria-hidden="true"><use href="#icon-image"/></svg></span>
+            <strong>이미지를 불러와 시작하세요</strong>
+            <button class="button button-secondary choose-file" type="button">이미지 열기</button>
+          </div>
+        </div>
+        <div class="editor-help" id="editor-help">
+          <span><svg class="icon" aria-hidden="true"><use href="#icon-pan"/></svg> 드래그로 이동</span>
+          <span><svg class="icon" aria-hidden="true"><use href="#icon-mouse"/></svg> 휠로 포인터 중심 확대·축소</span>
+        </div>
+      </section>
+
+      <aside class="panel settings-panel" aria-labelledby="settings-heading">
+        <div class="panel-heading"><span class="step-number">03</span><h2 id="settings-heading">편집 및 출력 설정</h2></div>
+        <div class="setting-group composition-controls">
+          <div class="label-row"><label for="zoom">확대·축소</label><output id="zoom-value" for="zoom">100%</output></div>
+          <div class="zoom-controls">
+            <button type="button" class="button icon-button" id="zoom-out" aria-label="축소" disabled>−</button>
+            <input id="zoom" type="range" min="0" max="1000" value="500" disabled>
+            <button type="button" class="button icon-button" id="zoom-in" aria-label="확대" disabled>+</button>
+          </div>
+          <div class="frame-actions">
+            <button type="button" class="button button-secondary" id="fit" disabled><svg class="icon" aria-hidden="true"><use href="#icon-fit"/></svg> 맞추기</button>
+            <button type="button" class="button button-secondary" id="fill" disabled><svg class="icon" aria-hidden="true"><use href="#icon-fill"/></svg> 채우기</button>
+          </div>
+          <button type="button" class="button button-plain" id="reset" disabled><svg class="icon" aria-hidden="true"><use href="#icon-reset"/></svg> 구도 초기화</button>
+        </div>
+        <div class="setting-group guide-controls">
+          <label class="toggle-row"><input id="show-guides" type="checkbox" checked> 분할 가이드 표시</label>
+          <label class="toggle-row"><input id="show-numbers" type="checkbox" checked> 칸 번호 표시</label>
+        </div>
+        <div class="setting-group output-settings">
+          <label for="format">출력 형식</label>
+          <select id="format" aria-describedby="format-help">
+            <option value="auto">자동 최적화</option>
+            <option value="jpeg">JPG 우선</option>
+            <option value="png">PNG 우선</option>
+          </select>
+          <p id="format-help">PNG가 200KB를 넘는 칸은 JPG로 저장합니다.</p>
+          <dl class="spec-list">
+            <div><dt>저장 해상도</dt><dd>720 × 150px</dd></div>
+            <div><dt>플랫폼 표시</dt><dd>441 × 92px</dd></div>
+            <div><dt>용량 상한</dt><dd class="accent">200 KB / 장</dd></div>
+          </dl>
+        </div>
+      </aside>
+    </div>
+
+    <section class="panel preview-panel" aria-labelledby="preview-heading">
+      <div class="preview-area">
+        <div class="panel-heading"><span class="step-number">04</span><h2 id="preview-heading">플랫폼 미리보기</h2><span class="panel-detail">883 × 278px</span></div>
+        <div class="preview-wrap">
+          <canvas id="preview" width="883" height="278" aria-label="441×92px 이미지 6장을 검은색 1px 간격으로 배치한 미리보기"></canvas>
+          <p id="empty-preview" class="empty-preview">이미지를 불러오면 여기에 표시됩니다</p>
+        </div>
+        <p class="preview-caption">칸 사이 1px 간격은 미리보기에만 표시합니다. 투명 영역은 흰색 바탕으로 표시합니다.</p>
+      </div>
+      <div class="download-area">
+        <p class="download-kicker">분할 이미지 저장</p>
+        <p class="download-spec">720 × 150px <span>·</span> 6장</p>
+        <button class="button download-button" id="export" type="button" disabled><svg class="icon" aria-hidden="true"><use href="#icon-download"/></svg><span id="export-label">6장 생성 + ZIP 다운로드</span></button>
+        <p id="export-status" class="export-status" role="status" aria-atomic="true">이미지를 불러오면 다운로드할 수 있습니다.</p>
+        <a class="retry-link" id="zip-link" download="split-image-studio.zip" hidden>ZIP 다시 다운로드</a>
+      </div>
+    </section>
+
+    <section class="panel results-panel" id="results" aria-labelledby="results-heading" hidden>
+      <div class="panel-heading"><h2 id="results-heading">개별 이미지 다운로드</h2><span class="panel-detail">720 × 150px</span></div>
+      <div class="results-grid" id="results-grid"></div>
+    </section>
+
+    <noscript><p class="noscript">이미지 편집을 사용하려면 브라우저에서 JavaScript를 켜 주세요.</p></noscript>
+    <footer class="footer"><span>Split Image Studio</span><span>무료 사용 · 로그인 및 워터마크 없음</span></footer>
+  </main>
+</body>
+</html>
