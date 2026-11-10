@@ -22,7 +22,7 @@
   const exportStatus = byId('export-status');
   const guides = byId('show-guides');
   const numbers = byId('show-numbers');
-  const snapCenter = byId('snap-center');
+  const snapAlignment = byId('snap-center');
   const chooseButtons = Array.from(document.querySelectorAll('.choose-file'));
   const compositionButtons = ['zoom', 'zoom-value', 'zoom-in', 'zoom-out', 'fit', 'fill', 'reset'].map(byId);
   const dropTargets = Array.from(document.querySelectorAll('[data-drop-target]'));
@@ -32,6 +32,7 @@
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const snapEnter = 8;
   const snapRelease = 14;
+  const snapAnchors = [0.5, 0, 1];
 
   let source = null;
   let view = null;
@@ -295,19 +296,21 @@
     context.lineWidth = 1;
     context.strokeRect(x, y, frameWidth, frameHeight);
 
-    if (snapCenter?.checked && (pan?.snapX || pan?.snapY)) {
+    if (snapAlignment?.checked && pan && (pan.snapX !== null || pan.snapY !== null)) {
       context.save();
-      context.strokeStyle = '#c4f080';
-      context.lineWidth = 1.5;
+      context.strokeStyle = '#e4ffc1';
+      context.lineWidth = 2;
       context.setLineDash([5, 4]);
       context.beginPath();
-      if (pan.snapX) {
-        context.moveTo(x + frameWidth / 2, y);
-        context.lineTo(x + frameWidth / 2, y + frameHeight);
+      if (pan.snapX !== null) {
+        const guideX = x + pan.snapX * frameWidth;
+        context.moveTo(guideX, y);
+        context.lineTo(guideX, y + frameHeight);
       }
-      if (pan.snapY) {
-        context.moveTo(x, y + frameHeight / 2);
-        context.lineTo(x + frameWidth, y + frameHeight / 2);
+      if (pan.snapY !== null) {
+        const guideY = y + pan.snapY * frameHeight;
+        context.moveTo(x, guideY);
+        context.lineTo(x + frameWidth, guideY);
       }
       context.stroke();
       context.restore();
@@ -459,11 +462,31 @@
     pan = null;
     stage.classList.remove('is-panning');
     if (editor.hasPointerCapture(id)) editor.releasePointerCapture(id);
-    if (snapX || snapY) scheduleDraw();
+    if (snapX !== null || snapY !== null) scheduleDraw();
   }
 
-  function closeToCenter(position, center, snapped) {
-    return Math.abs(position - center) * scene.scale <= (snapped ? snapRelease : snapEnter);
+  function snapAnchor(position, remaining, current) {
+    const distanceTo = anchor => Math.abs(position - remaining * anchor) * scene.scale;
+    let nearest = null;
+    let nearestDistance = Infinity;
+    for (const anchor of snapAnchors) {
+      const distance = distanceTo(anchor);
+      if (distance + 1e-7 < nearestDistance) {
+        nearest = anchor;
+        nearestDistance = distance;
+      }
+    }
+    const candidate = nearestDistance <= snapEnter ? nearest : null;
+    if (current === null) return candidate;
+
+    const currentDistance = distanceTo(current);
+    if (currentDistance > snapRelease) return candidate;
+    if (candidate === null || candidate === current) return current;
+
+    // Avoid flicker between nearby targets while allowing even close edges to be selected.
+    const separation = Math.abs(remaining * (candidate - current)) * scene.scale;
+    const switchMargin = Math.min(2, separation / 4);
+    return nearestDistance + switchMargin < currentDistance ? candidate : current;
   }
 
   for (const button of chooseButtons) button.addEventListener('click', () => fileInput.click());
@@ -495,7 +518,7 @@
     finishZoom();
     pan = {
       id: event.pointerId, x: event.clientX, y: event.clientY,
-      rawX: view.x, rawY: view.y, snapX: false, snapY: false,
+      rawX: view.x, rawY: view.y, snapX: null, snapY: null,
     };
     editor.setPointerCapture(event.pointerId);
     stage.classList.add('is-panning');
@@ -506,15 +529,15 @@
     pan.rawY += (event.clientY - pan.y) / scene.scale;
     pan.x = event.clientX;
     pan.y = event.clientY;
-    const centerX = centeredPoint.x - source.width * view.scale / 2;
-    const centerY = centeredPoint.y - source.height * view.scale / 2;
-    const snapping = snapCenter?.checked && !event.altKey;
-    const snapX = Boolean(snapping && closeToCenter(pan.rawX, centerX, pan.snapX));
-    const snapY = Boolean(snapping && closeToCenter(pan.rawY, centerY, pan.snapY));
+    const remainingX = preset.width - source.width * view.scale;
+    const remainingY = preset.height - source.height * view.scale;
+    const snapping = snapAlignment?.checked && !event.altKey;
+    const snapX = snapping ? snapAnchor(pan.rawX, remainingX, pan.snapX) : null;
+    const snapY = snapping ? snapAnchor(pan.rawY, remainingY, pan.snapY) : null;
     if (snapX !== pan.snapX || snapY !== pan.snapY) scheduleDraw();
     pan.snapX = snapX;
     pan.snapY = snapY;
-    setPosition(snapX ? centerX : pan.rawX, snapY ? centerY : pan.rawY);
+    setPosition(snapX === null ? pan.rawX : remainingX * snapX, snapY === null ? pan.rawY : remainingY * snapY);
   });
   for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) editor.addEventListener(event, stopPan);
   editor.addEventListener('wheel', event => {
@@ -568,7 +591,7 @@
   byId('reset').addEventListener('click', () => setCentered('fill'));
   guides.addEventListener('change', () => scheduleDraw());
   numbers.addEventListener('change', () => scheduleDraw());
-  snapCenter?.addEventListener('change', () => scheduleDraw());
+  snapAlignment?.addEventListener('change', () => scheduleDraw());
   format.addEventListener('change', () => {
     byId('format-help').textContent = format.value === 'jpeg'
       ? '투명한 부분은 흰색으로 채우고 JPG로 저장합니다.'
