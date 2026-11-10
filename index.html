@@ -8,9 +8,9 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' file:; style-src 'self' file:; img-src 'self' blob: data:; base-uri 'none'; form-action 'none'">
   <title>6분할 이미지 스튜디오</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23c4f080'/%3E%3Cpath d='M8 8h6v4H8zm10 0h6v4h-6zM8 14h6v4H8zm10 0h6v4h-6zM8 20h6v4H8zm10 0h6v4h-6z' fill='%23161e13'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./styles.css?v=2">
   <script defer src="./image-core.js"></script>
-  <script defer src="./studio.js"></script>
+  <script defer src="./studio.js?v=2"></script>
 </head>
 <body>
   <svg class="symbols" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -85,12 +85,19 @@
       <aside class="panel settings-panel" aria-labelledby="settings-heading">
         <div class="panel-heading"><span class="step-number">03</span><h2 id="settings-heading">편집 및 출력 설정</h2></div>
         <div class="setting-group composition-controls">
-          <div class="label-row"><label for="zoom">확대·축소</label><output id="zoom-value" for="zoom">100%</output></div>
+          <div class="label-row">
+            <label for="zoom">확대·축소</label>
+            <div class="zoom-field" title="배율을 입력하고 Enter로 적용">
+              <input id="zoom-value" type="number" inputmode="decimal" step="any" value="100" aria-label="확대 비율 직접 입력 (%)" disabled>
+              <span aria-hidden="true">%</span>
+            </div>
+          </div>
           <div class="zoom-controls">
             <button type="button" class="button icon-button" id="zoom-out" aria-label="축소" disabled>−</button>
             <input id="zoom" type="range" min="0" max="1000" value="500" disabled>
             <button type="button" class="button icon-button" id="zoom-in" aria-label="확대" disabled>+</button>
           </div>
+          <p class="control-note">Shift를 누르고 휠 또는 ± 버튼으로 미세 조정</p>
           <div class="frame-actions">
             <button type="button" class="button button-secondary" id="fit" disabled><svg class="icon" aria-hidden="true"><use href="#icon-fit"/></svg> 맞추기</button>
             <button type="button" class="button button-secondary" id="fill" disabled><svg class="icon" aria-hidden="true"><use href="#icon-fill"/></svg> 채우기</button>
@@ -98,6 +105,7 @@
           <button type="button" class="button button-plain" id="reset" disabled><svg class="icon" aria-hidden="true"><use href="#icon-reset"/></svg> 구도 초기화</button>
         </div>
         <div class="setting-group guide-controls">
+          <label class="toggle-row" title="Alt를 누른 채 드래그하면 잠시 해제됩니다"><input id="snap-center" type="checkbox" checked> 중앙 자동 맞춤</label>
           <label class="toggle-row"><input id="show-guides" type="checkbox" checked> 분할 가이드 표시</label>
           <label class="toggle-row"><input id="show-numbers" type="checkbox" checked> 칸 번호 표시</label>
         </div>

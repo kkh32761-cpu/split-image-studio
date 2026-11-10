@@ -15,23 +15,30 @@
   const fileInput = byId('file-input');
   const format = byId('format');
   const zoom = byId('zoom');
+  const zoomValue = byId('zoom-value');
   const exportButton = byId('export');
   const zipLink = byId('zip-link');
   const loadNote = byId('load-note');
   const exportStatus = byId('export-status');
   const guides = byId('show-guides');
   const numbers = byId('show-numbers');
+  const snapCenter = byId('snap-center');
   const chooseButtons = Array.from(document.querySelectorAll('.choose-file'));
-  const compositionButtons = ['zoom', 'zoom-in', 'zoom-out', 'fit', 'fill', 'reset'].map(byId);
+  const compositionButtons = ['zoom', 'zoom-value', 'zoom-in', 'zoom-out', 'fit', 'fill', 'reset'].map(byId);
   const dropTargets = Array.from(document.querySelectorAll('[data-drop-target]'));
   const centeredPoint = { x: preset.width / 2, y: preset.height / 2 };
   const wholeFrame = { x: 0, y: 0, width: preset.width, height: preset.height };
   const numberFormat = new Intl.NumberFormat('ko-KR');
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const snapEnter = 8;
+  const snapRelease = 14;
 
   let source = null;
   let view = null;
   let scene = null;
   let pan = null;
+  let zoomMotion = null;
+  let zoomValueDirty = false;
   let loading = false;
   let exporting = false;
   let animationFrame = 0;
@@ -85,6 +92,7 @@
 
   async function loadFile(file) {
     if (!file || loading || exporting) return;
+    finishZoom();
     loading = true;
     stopPan();
     updateControls();
@@ -103,6 +111,7 @@
       source?.bitmap.close?.();
       source = decoded;
       view = centeredView(source, preset, 'fill');
+      zoomValueDirty = false;
       byId('file-name').textContent = file.name;
       byId('file-name').title = file.name;
       byId('file-resolution').textContent = `${numberFormat.format(source.width)} × ${numberFormat.format(source.height)}px`;
@@ -131,14 +140,20 @@
     return { base, min: centeredView(source, preset, 'fit').scale / 4, max: base * 20 };
   }
 
+  function requestedView() {
+    return zoomMotion?.target ?? view;
+  }
+
   function updateZoom() {
     const { base, min, max } = zoomScales();
-    const percent = view.scale / base * 100;
-    const precision = percent < 1 ? 2 : percent < 10 ? 1 : 0;
-    const label = `${Number(percent.toFixed(precision))}%`;
-    zoom.value = Math.round(1000 * Math.log(view.scale / min) / Math.log(max / min));
-    zoom.setAttribute('aria-valuetext', label);
-    byId('zoom-value').textContent = label;
+    const ratio = Math.log(requestedView().scale / base);
+    const span = Math.log(ratio < 0 ? base / min : max / base);
+    // The slider has more travel near the default 100% scale.
+    zoom.value = Math.round(500 * (1 + Math.sign(ratio) * Math.sqrt(Math.abs(ratio) / span)));
+    const percent = requestedView().scale / base * 100;
+    const value = Number(percent < 1 ? percent.toPrecision(3) : percent.toFixed(2));
+    zoom.setAttribute('aria-valuetext', `${value}%`);
+    if (!zoomValueDirty) zoomValue.value = value;
   }
 
   function compositionChanged() {
@@ -157,22 +172,70 @@
     };
   }
 
-  function changeScale(scale, center = centeredPoint) {
+  function changeScale(scale, center = centeredPoint, smooth = true) {
     if (exportButton.disabled) return;
     const { min, max } = zoomScales();
-    const target = clamp(scale, min, max);
-    if (target === view.scale) return;
-    view = zoomAt(view, center, target);
+    const from = requestedView();
+    const targetScale = clamp(scale, min, max);
+    if (targetScale === from.scale) return;
+    stopPan();
+    const target = zoomAt(from, center, targetScale);
+    if (smooth && !reducedMotion.matches) {
+      const now = performance.now();
+      zoomMotion = { target, lastFrame: zoomMotion?.lastFrame ?? now, deadline: now + 135 };
+    } else {
+      view = target;
+      zoomMotion = null;
+    }
     compositionChanged();
   }
 
-  function moveView(x, y) {
-    view = { ...view, x: view.x + x, y: view.y + y };
+  function finishZoom() {
+    if (!zoomMotion) return;
+    view = zoomMotion.target;
+    zoomMotion = null;
+  }
+
+  function advanceZoom(timestamp) {
+    if (timestamp >= zoomMotion.deadline) {
+      finishZoom();
+      return;
+    }
+    const { target, lastFrame } = zoomMotion;
+    const progress = 1 - Math.exp(-Math.max(0, timestamp - lastFrame) / 27);
+    zoomMotion.lastFrame = Math.max(timestamp, lastFrame);
+    view = {
+      x: view.x + (target.x - view.x) * progress,
+      y: view.y + (target.y - view.y) * progress,
+      scale: view.scale + (target.scale - view.scale) * progress,
+    };
+  }
+
+  function stepZoom(direction, fine = false) {
+    const factor = fine ? 1.01 : 1.05;
+    changeScale(requestedView().scale * factor ** direction);
+  }
+
+  function commitZoomValue() {
+    if (!zoomValueDirty) return;
+    zoomValueDirty = false;
+    const percent = zoomValue.valueAsNumber;
+    if (!exportButton.disabled && Number.isFinite(percent) && percent > 0) {
+      changeScale(zoomScales().base * (percent / 100));
+    }
+    if (source) updateZoom();
+  }
+
+  function setPosition(x, y) {
+    if (x === view.x && y === view.y) return;
+    view = { ...view, x, y };
     compositionChanged();
   }
 
   function setCentered(mode) {
     if (exportButton.disabled) return;
+    stopPan();
+    zoomMotion = null;
     view = centeredView(source, preset, mode);
     compositionChanged();
   }
@@ -232,6 +295,24 @@
     context.lineWidth = 1;
     context.strokeRect(x, y, frameWidth, frameHeight);
 
+    if (snapCenter?.checked && (pan?.snapX || pan?.snapY)) {
+      context.save();
+      context.strokeStyle = '#c4f080';
+      context.lineWidth = 1.5;
+      context.setLineDash([5, 4]);
+      context.beginPath();
+      if (pan.snapX) {
+        context.moveTo(x + frameWidth / 2, y);
+        context.lineTo(x + frameWidth / 2, y + frameHeight);
+      }
+      if (pan.snapY) {
+        context.moveTo(x, y + frameHeight / 2);
+        context.lineTo(x + frameWidth, y + frameHeight / 2);
+      }
+      context.stroke();
+      context.restore();
+    }
+
     if (source && numbers.checked) {
       context.font = '600 10px ui-monospace, monospace';
       context.textAlign = 'center';
@@ -272,8 +353,12 @@
   function scheduleDraw(refreshPreview = false) {
     previewDirty ||= refreshPreview;
     if (animationFrame) return;
-    animationFrame = requestAnimationFrame(() => {
+    animationFrame = requestAnimationFrame(timestamp => {
       animationFrame = 0;
+      if (zoomMotion) {
+        advanceZoom(timestamp);
+        previewDirty = true;
+      }
       try {
         drawEditor();
         if (previewDirty) drawPreview();
@@ -282,6 +367,7 @@
       } finally {
         previewDirty = false;
       }
+      if (zoomMotion) scheduleDraw();
     });
   }
 
@@ -316,6 +402,8 @@
 
   async function exportTiles() {
     if (exportButton.disabled) return;
+    commitZoomValue();
+    finishZoom();
     const snapshot = { source, view: { ...view }, format: format.value };
     if (!preset.tiles.some(tile => imageIntersection(snapshot.source, snapshot.view, tile))) {
       status(exportStatus, '출력 칸 안에 이미지가 없습니다. 사진을 프레임 안으로 옮겨 주세요.', 'error');
@@ -367,10 +455,15 @@
 
   function stopPan(event) {
     if (!pan || (event && pan.id !== event.pointerId)) return;
-    const id = pan.id;
+    const { id, snapX, snapY } = pan;
     pan = null;
     stage.classList.remove('is-panning');
     if (editor.hasPointerCapture(id)) editor.releasePointerCapture(id);
+    if (snapX || snapY) scheduleDraw();
+  }
+
+  function closeToCenter(position, center, snapped) {
+    return Math.abs(position - center) * scene.scale <= (snapped ? snapRelease : snapEnter);
   }
 
   for (const button of chooseButtons) button.addEventListener('click', () => fileInput.click());
@@ -399,50 +492,83 @@
 
   editor.addEventListener('pointerdown', event => {
     if (exportButton.disabled || !scene || event.button !== 0 || pan) return;
-    pan = { id: event.pointerId, x: event.clientX, y: event.clientY };
+    finishZoom();
+    pan = {
+      id: event.pointerId, x: event.clientX, y: event.clientY,
+      rawX: view.x, rawY: view.y, snapX: false, snapY: false,
+    };
     editor.setPointerCapture(event.pointerId);
     stage.classList.add('is-panning');
   });
   editor.addEventListener('pointermove', event => {
     if (pan?.id !== event.pointerId || !scene) return;
-    const x = (event.clientX - pan.x) / scene.scale;
-    const y = (event.clientY - pan.y) / scene.scale;
+    pan.rawX += (event.clientX - pan.x) / scene.scale;
+    pan.rawY += (event.clientY - pan.y) / scene.scale;
     pan.x = event.clientX;
     pan.y = event.clientY;
-    if (x || y) moveView(x, y);
+    const centerX = centeredPoint.x - source.width * view.scale / 2;
+    const centerY = centeredPoint.y - source.height * view.scale / 2;
+    const snapping = snapCenter?.checked && !event.altKey;
+    const snapX = Boolean(snapping && closeToCenter(pan.rawX, centerX, pan.snapX));
+    const snapY = Boolean(snapping && closeToCenter(pan.rawY, centerY, pan.snapY));
+    if (snapX !== pan.snapX || snapY !== pan.snapY) scheduleDraw();
+    pan.snapX = snapX;
+    pan.snapY = snapY;
+    setPosition(snapX ? centerX : pan.rawX, snapY ? centerY : pan.rawY);
   });
   for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) editor.addEventListener(event, stopPan);
   editor.addEventListener('wheel', event => {
     if (exportButton.disabled || !scene) return;
+    const delta = event.deltaY || (event.shiftKey ? event.deltaX : 0);
+    if (!delta) return;
     event.preventDefault();
+    if (pan) return;
     const units = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? editor.clientHeight : 1;
-    const factor = Math.exp(clamp(-event.deltaY * units * 0.0018, -0.8, 0.8));
-    changeScale(view.scale * factor, editorPoint(event));
+    const rate = event.shiftKey ? 0.00012 : 0.0005;
+    const factor = Math.exp(-clamp(delta * units, -480, 480) * rate);
+    changeScale(requestedView().scale * factor, editorPoint(event));
   }, { passive: false });
   editor.addEventListener('keydown', event => {
     if (exportButton.disabled) return;
     const distance = event.shiftKey ? 24 : 8;
     const directions = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
     const direction = directions[event.key];
-    if (direction) moveView(direction[0] * distance, direction[1] * distance);
-    else if (event.key === '+' || event.key === '=') changeScale(view.scale * 1.2);
-    else if (event.key === '-') changeScale(view.scale / 1.2);
+    if (direction) {
+      stopPan();
+      finishZoom();
+      setPosition(view.x + direction[0] * distance, view.y + direction[1] * distance);
+    } else if (event.key === '+' || event.key === '=') stepZoom(1);
+    else if (event.key === '-') stepZoom(-1);
     else return;
     event.preventDefault();
   });
 
-  byId('zoom-in').addEventListener('click', () => changeScale(view.scale * 1.2));
-  byId('zoom-out').addEventListener('click', () => changeScale(view.scale / 1.2));
+  byId('zoom-in').addEventListener('click', event => stepZoom(1, event.shiftKey));
+  byId('zoom-out').addEventListener('click', event => stepZoom(-1, event.shiftKey));
   zoom.addEventListener('input', () => {
     if (exportButton.disabled) return;
-    const { min, max } = zoomScales();
-    changeScale(min * (max / min) ** (Number(zoom.value) / 1000));
+    const { base, min, max } = zoomScales();
+    const offset = Number(zoom.value) / 500 - 1;
+    const span = Math.log(offset < 0 ? base / min : max / base);
+    changeScale(base * Math.exp(Math.sign(offset) * offset ** 2 * span), centeredPoint, false);
+  });
+  zoomValue.addEventListener('input', () => { zoomValueDirty = true; });
+  zoomValue.addEventListener('blur', commitZoomValue);
+  zoomValue.addEventListener('keydown', event => {
+    if (event.key === 'Enter') commitZoomValue();
+    else if (event.key === 'Escape') {
+      zoomValueDirty = false;
+      if (source) updateZoom();
+    } else return;
+    event.preventDefault();
+    zoomValue.blur();
   });
   byId('fit').addEventListener('click', () => setCentered('fit'));
   byId('fill').addEventListener('click', () => setCentered('fill'));
   byId('reset').addEventListener('click', () => setCentered('fill'));
   guides.addEventListener('change', () => scheduleDraw());
   numbers.addEventListener('change', () => scheduleDraw());
+  snapCenter?.addEventListener('change', () => scheduleDraw());
   format.addEventListener('change', () => {
     byId('format-help').textContent = format.value === 'jpeg'
       ? '투명한 부분은 흰색으로 채우고 JPG로 저장합니다.'

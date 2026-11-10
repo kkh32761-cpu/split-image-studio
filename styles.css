@@ -93,8 +93,13 @@ button, input, select { font: inherit; }
 .setting-group + .setting-group { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line-soft); }
 .label-row { display: flex; justify-content: space-between; align-items: center; }
 .label-row label, .output-settings > label { font-size: 12px; font-weight: 650; }
-.label-row output { color: var(--accent); font: 600 12px var(--mono); }
+.zoom-field { display: flex; align-items: center; gap: 4px; padding-right: 6px; border: 1px solid #414c58; border-radius: 5px; background: #13171d; color: var(--accent); font: 600 12px var(--mono); }
+.zoom-field:focus-within { border-color: var(--accent); }
+.zoom-field input { width: 8ch; padding: 5px 0 5px 5px; border: 0; background: transparent; color: inherit; font: inherit; text-align: right; appearance: textfield; }
+.zoom-field input::-webkit-inner-spin-button, .zoom-field input::-webkit-outer-spin-button { appearance: none; margin: 0; }
+.zoom-field input:focus-visible { outline-offset: 0; }
 .zoom-controls { display: grid; grid-template-columns: 30px minmax(0, 1fr) 30px; align-items: center; gap: 8px; margin-top: 8px; }
+.control-note { margin-top: 5px; color: var(--muted); font-size: 11px; }
 input[type='range'] { width: 100%; margin: 0; cursor: pointer; accent-color: var(--accent); }
 input:disabled { cursor: default; }
 .frame-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin-top: 9px; }
